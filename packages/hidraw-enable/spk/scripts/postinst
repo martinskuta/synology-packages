@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+PACKAGE_DEST=${SYNOPKG_PKGDEST:-/var/packages/hidraw-enable/target}
+mkdir -p "$PACKAGE_DEST/var"
+echo 'HIDRAW Support installed. Configure the root boot task shown by the install wizard.'
+echo 'The stock modules remain in place until the boot task runs.'

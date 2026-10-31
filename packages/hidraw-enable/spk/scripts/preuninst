@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+echo 'Uninstalling HIDRAW Support does not unload kernel modules; reboot to restore the stock HID stack.'

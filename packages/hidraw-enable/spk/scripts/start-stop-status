@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+PACKAGE_DEST=${SYNOPKG_PKGDEST:-/var/packages/hidraw-enable/target}
+case "${1:-}" in
+    start)
+        echo 'HIDRAW module loading is handled by the root Task Scheduler boot task.'
+        exit 0
+        ;;
+    stop)
+        echo 'Stopping is a no-op; use the root apply restore command or reboot.'
+        exit 0
+        ;;
+    status)
+        exec "$PACKAGE_DEST/bin/apply" status
+        ;;
+    *)
+        echo 'Usage: start-stop-status {start|stop|status}' >&2
+        exit 1
+        ;;
+esac

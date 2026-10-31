@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/common.sh"
+
+PKG_TEMP=${SYNOPKG_PKGTEMP:-}
+if [ -z "$PKG_TEMP" ]; then
+    echo 'DSM did not provide SYNOPKG_PKGTEMP; refusing installation.' >&2
+    exit 1
+fi
+
+if ! hidraw_load_target_env "$PKG_TEMP/scripts/target.env"; then
+    exit 1
+fi
+
+if ! hidraw_check_compatibility; then
+    echo 'HIDRAW Support is not compatible with this NAS; installation cancelled.' >&2
+    exit 1
+fi
+
+echo 'HIDRAW Support target checks passed.'

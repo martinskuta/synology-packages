@@ -1,0 +1,213 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+PACKAGE_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
+STATE_FILE="$PACKAGE_ROOT/var/state"
+LOG_FILE="$PACKAGE_ROOT/var/apply.log"
+MODULE_FILE="$PACKAGE_ROOT/modules/hid.ko"
+FALLBACK_DIR="$PACKAGE_ROOT/modules/fallback"
+# shellcheck disable=SC1091
+. "$PACKAGE_ROOT/scripts/common.sh"
+
+log() {
+    mkdir -p "$PACKAGE_ROOT/var"
+    printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" \
+        | tee -a "$LOG_FILE"
+}
+
+write_state() {
+    mkdir -p "$PACKAGE_ROOT/var"
+    printf '%s\n' "$1" > "$STATE_FILE"
+}
+
+module_loaded() {
+    [ -d "$(hidraw_root_path "/sys/module/$1")" ]
+}
+
+require_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        log 'This command must run as root.'
+        return 1
+    fi
+}
+
+load_target_metadata() {
+    hidraw_load_target_env "$PACKAGE_ROOT/scripts/target.env"
+}
+
+is_active() {
+    [ -r "$STATE_FILE" ] || return 1
+    [ "$(cat "$STATE_FILE")" = active ] || return 1
+    module_loaded hid || return 1
+    [ -d "$(hidraw_root_path /sys/class/hidraw)" ]
+}
+
+unload_stack() {
+    for module in usbhid hid_generic hid; do
+        if module_loaded "$module"; then
+            if ! rmmod "$module"; then
+                log "Could not unload $module; it may be in use."
+                return 1
+            fi
+        fi
+    done
+
+    for module in usbhid hid_generic hid; do
+        if module_loaded "$module"; then
+            log "Module $module is still loaded after rmmod."
+            return 1
+        fi
+    done
+}
+
+load_named_module() {
+    module=$1
+    if module_loaded "$module"; then
+        return 0
+    fi
+
+    if command -v modprobe >/dev/null 2>&1 && modprobe "$module"; then
+        return 0
+    fi
+
+    module_path=$(modinfo -n "$module" 2>/dev/null || true)
+    if [ -n "$module_path" ]; then
+        module_path=$(hidraw_root_path "$module_path")
+        if [ -r "$module_path" ] && insmod "$module_path"; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+load_stock_stack() {
+    load_named_module hid || {
+        log 'Unable to load the stock hid module.'
+        return 1
+    }
+    load_support_module usbhid usbhid.ko || return 1
+    load_support_module hid_generic hid-generic.ko || return 1
+}
+
+restore_after_failure() {
+    log 'Restoring the stock HID stack.'
+    if unload_stack && load_stock_stack; then
+        write_state failed
+        log 'The stock HID stack was restored.'
+        return 0
+    fi
+    write_state failed
+    log 'WARNING: automatic stock-stack restoration failed; inspect this log and recover locally.'
+    return 1
+}
+
+load_support_module() {
+    module=$1
+    fallback=$2
+    if load_named_module "$module"; then
+        log "Loaded stock $module."
+        return 0
+    fi
+
+    log "Stock $module could not be loaded; trying the bundled fallback."
+    if module_loaded "$module"; then
+        rmmod "$module" || return 1
+    fi
+    if insmod "$FALLBACK_DIR/$fallback"; then
+        log "Loaded bundled fallback $fallback."
+        return 0
+    fi
+    log "Unable to load stock or bundled $module."
+    return 1
+}
+
+apply_start() {
+    if ! load_target_metadata; then
+        write_state mismatch
+        log 'Missing or invalid target metadata; leaving stock modules unchanged.'
+        return 1
+    fi
+    if ! hidraw_check_compatibility; then
+        write_state mismatch
+        log 'Compatibility check failed; leaving stock modules unchanged.'
+        return 1
+    fi
+
+    bundled_vermagic=$(modinfo -F vermagic "$MODULE_FILE" 2>/dev/null \
+        | sed 's/[[:space:]]*$//' || true)
+    if [ "$bundled_vermagic" != "$EXPECTED_VERMAGIC" ]; then
+        write_state mismatch
+        log "Bundled hid.ko vermagic mismatch: ${bundled_vermagic:-unknown}; expected $EXPECTED_VERMAGIC."
+        return 1
+    fi
+
+    if is_active; then
+        log 'The package HID module is already active.'
+        return 0
+    fi
+
+    require_root || return 1
+    log 'Applying the HIDRAW-enabled HID module.'
+    if ! unload_stack; then
+        restore_after_failure || true
+        return 1
+    fi
+
+    if ! insmod "$MODULE_FILE"; then
+        log 'insmod of the package hid.ko failed.'
+        restore_after_failure || true
+        return 1
+    fi
+
+    if ! load_support_module usbhid usbhid.ko \
+        || ! load_support_module hid_generic hid-generic.ko; then
+        restore_after_failure || true
+        return 1
+    fi
+
+    if ! module_loaded hid || [ ! -d "$(hidraw_root_path /sys/class/hidraw)" ]; then
+        log 'HIDRAW verification failed after loading the package module.'
+        restore_after_failure || true
+        return 1
+    fi
+
+    write_state active
+    log 'HIDRAW-enabled HID module is active.'
+}
+
+apply_restore() {
+    require_root || return 1
+    log 'Restoring the stock HID stack on request.'
+    if ! unload_stack || ! load_stock_stack; then
+        write_state failed
+        log 'Stock HID stack restoration failed.'
+        return 1
+    fi
+    write_state inactive
+    log 'Stock HID stack restored.'
+}
+
+case "${1:-}" in
+    start)
+        apply_start
+        ;;
+    restore)
+        apply_restore
+        ;;
+    status)
+        if is_active; then
+            echo 'HIDRAW Support is running.'
+            exit 0
+        fi
+        state=inactive
+        [ ! -r "$STATE_FILE" ] || state=$(cat "$STATE_FILE")
+        echo "HIDRAW Support is not running (state: $state)."
+        exit 3
+        ;;
+    *)
+        echo 'Usage: apply {start|restore|status}' >&2
+        exit 1
+        ;;
+esac

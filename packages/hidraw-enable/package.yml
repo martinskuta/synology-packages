@@ -1,0 +1,14 @@
+package: hidraw-enable
+displayname: HIDRAW Support
+description: Loads a hidraw-enabled HID core module at boot.
+maintainer: martinskuta
+support_url: https://github.com/martinskuta/synology-packages
+revision: 1
+os_min_ver: "7.0-40000"
+targets:
+  - platform: geminilakenk
+    arch: x86_64
+    source_build: "7.4-90080"
+    dsm_builds: [90080]
+    kernel_release: "5.10.55+"
+    vermagic: "5.10.55+ SMP mod_unload"

@@ -1,0 +1,3 @@
+1:
+- Initial release for DSM 7.4 build 90080 on geminilakenk.
+- Load the HIDRAW-enabled HID core from the package directory at boot.

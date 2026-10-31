@@ -64,7 +64,9 @@ The `build.yml` workflow validates package configuration, runs Python tests and 
 
 ## Package configuration and updates
 
-Each package owns `packages/<name>/package.yml`, its build hook, and its `spk/` contents. The `hidraw-enable` config separates the source used to build (`source_build`) from the NAS build numbers permitted to install it (`dsm_builds`). The version is `<source_build>-<revision>`, for example `7.4-90080-1`.
+Each package owns `packages/<name>/package.yml`, its build hook, and its `spk/` contents. The `hidraw-enable` config separates the source used to build (`source_build`) from the NAS build numbers permitted to install it (`dsm_builds`). The version is `<source_version>.<source_build_number>-<revision>`, for example `7.4.90080-1` for source build `7.4-90080` and revision `1`. DSM requires exactly one dash (`[feature number]-[build number]`) and rejects other formats with "Invalid file format"; the index skips any older release that does not follow it.
+
+Files under `spk/payload/` (such as `bin/apply`) are merged into `package.tgz` on top of the build hook's `$OUT_DIR/payload/`.
 
 To allow another DSM update build that reuses the same source/toolchain, first verify its exact kernel release and stock vermagic, then add that build number to the matching `dsm_builds` list. This case is deliberately not auto-discovered. `os_min_ver` is the package's minimum DSM version; index `os_min_ver` and `os_max_ver` are derived from each target's DSM build list.
 

@@ -17,9 +17,8 @@ class PackagePackingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             payload = root / "payload"
-            (payload / "bin").mkdir(parents=True)
+            # The build output only contains modules; bin/apply must come from spk/payload.
             (payload / "modules/fallback").mkdir(parents=True)
-            (payload / "bin/apply").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             (payload / "modules/hid.ko").write_bytes(b"rebuilt hid module")
             (payload / "modules/fallback/usbhid.ko").write_bytes(b"fallback usbhid")
             (payload / "modules/fallback/hid-generic.ko").write_bytes(b"fallback hid generic")
@@ -41,7 +40,7 @@ class PackagePackingTests(unittest.TestCase):
 
             self.assertTrue(result["spk"].is_file())
             self.assertEqual(
-                "hidraw-enable_geminilakenk_7.4-90080-1.spk", result["spk"].name
+                "hidraw-enable_geminilakenk_7.4.90080-1.spk", result["spk"].name
             )
             self.assertTrue(result["sha256"].is_file())
             self.assertTrue(result["meta"].is_file())
@@ -65,7 +64,7 @@ class PackagePackingTests(unittest.TestCase):
                 self.assertNotIn("./INFO", names)
                 self.assertTrue(spk.getmember("scripts/preinst").mode & 0o111)
                 info = spk.extractfile("INFO").read().decode("utf-8")
-                self.assertIn('version="7.4-90080-1"', info)
+                self.assertIn('version="7.4.90080-1"', info)
                 self.assertIn('arch="geminilakenk"', info)
                 self.assertIn('os_min_ver="7.4-90080"', info)
                 self.assertIn('os_max_ver="7.4-90080"', info)
@@ -81,6 +80,10 @@ class PackagePackingTests(unittest.TestCase):
                     member for member in payload_tar.getmembers() if member.name.endswith("bin/apply")
                 )
                 self.assertTrue(apply_member.mode & 0o111)
+                self.assertEqual(
+                    (PACKAGE_DIR / "spk/payload/bin/apply").read_bytes(),
+                    payload_tar.extractfile(apply_member).read(),
+                )
 
             metadata = json.loads(result["meta"].read_text(encoding="utf-8"))
             self.assertEqual("hidraw-enable", metadata["package"])

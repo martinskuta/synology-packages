@@ -18,7 +18,8 @@ class IndexError(RuntimeError):
     """Raised when release metadata or package icons cannot be indexed."""
 
 
-VERSION_RE = re.compile(r"^(?P<source>\d+(?:\.\d+)*)-(?P<build>\d+)-(?P<revision>\d+)$")
+# DSM only accepts `[feature number]-[build number]` (one dash), e.g. 7.4.90080-1.
+VERSION_RE = re.compile(r"^(?P<feature>\d+(?:\.\d+)*)-(?P<revision>\d+)$")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
@@ -94,8 +95,8 @@ def version_key(version: str) -> tuple:
     match = VERSION_RE.fullmatch(version)
     if not match:
         raise IndexError(f"invalid package version {version!r}")
-    source_parts = tuple(int(part) for part in match.group("source").split("."))
-    return source_parts, int(match.group("build")), int(match.group("revision"))
+    feature_parts = tuple(int(part) for part in match.group("feature").split("."))
+    return feature_parts, int(match.group("revision"))
 
 
 def _arch_list(meta: dict) -> list[str]:
@@ -121,6 +122,15 @@ def latest_metadata(metadata_items: list[dict]) -> list[dict]:
             raise IndexError(f"release metadata has invalid dsm_builds: {meta['dsm_builds']!r}")
         builds = tuple(sorted(int(build) for build in meta["dsm_builds"]))
         identity = (meta["package"], meta["platform"], builds)
+        if not VERSION_RE.fullmatch(str(meta["version"])):
+            # Releases published before the DSM-compatible version format are
+            # rejected by Package Center ("Invalid file format"); never list them.
+            print(
+                f"skipping release {meta.get('tag', meta['package'])}: "
+                f"version {meta['version']!r} is not a valid DSM package version",
+                file=sys.stderr,
+            )
+            continue
         key = version_key(meta["version"])
         previous = latest.get(identity)
         if previous is None or key > previous[0]:

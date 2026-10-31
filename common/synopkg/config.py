@@ -171,11 +171,24 @@ def target_os_versions(package: dict[str, Any], target: dict[str, Any]) -> tuple
     )
 
 
+def package_version(package: dict[str, Any], target: dict[str, Any]) -> str:
+    """Return the DSM package version, e.g. source build 7.4-90080, revision 1 -> 7.4.90080-1.
+
+    DSM requires `[feature number]-[build number]` with exactly one dash, so the
+    source build's own dash becomes a dot and the revision is the build number.
+    """
+
+    source_match = SOURCE_BUILD_RE.fullmatch(target["source_build"])
+    if not source_match:
+        raise ConfigError(f"invalid source_build {target['source_build']!r}")
+    return f"{source_match.group('version')}.{source_match.group('build')}-{package['revision']}"
+
+
 def target_metadata(package: dict[str, Any], target: dict[str, Any]) -> dict[str, Any]:
     os_min_ver, os_max_ver = target_os_versions(package, target)
     return {
         "package": package["package"],
-        "version": f"{target['source_build']}-{package['revision']}",
+        "version": package_version(package, target),
         "tag": release_tag(package, target),
         "asset_name": asset_name(package, target),
         "os_min_ver": os_min_ver,
@@ -184,12 +197,11 @@ def target_metadata(package: dict[str, Any], target: dict[str, Any]) -> dict[str
 
 
 def release_tag(package: dict[str, Any], target: dict[str, Any]) -> str:
-    return f"{package['package']}/v{target['source_build']}-{package['revision']}"
+    return f"{package['package']}/v{package_version(package, target)}"
 
 
 def asset_name(package: dict[str, Any], target: dict[str, Any]) -> str:
-    version = f"{target['source_build']}-{package['revision']}"
-    return f"{package['package']}_{target['platform']}_{version}.spk"
+    return f"{package['package']}_{target['platform']}_{package_version(package, target)}.spk"
 
 
 def info_quote(value: Any) -> str:

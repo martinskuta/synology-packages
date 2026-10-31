@@ -51,23 +51,30 @@ class _Response:
 class PackageIndexTests(unittest.TestCase):
     def test_latest_revision_is_selected_per_package_platform_and_dsm_builds(self):
         revisions = [
-            metadata("7.4-90080-1"),
-            metadata("7.4-90080-2"),
-            metadata("7.4-90080-3", dsm_builds=(90082,)),
-            metadata("7.4-90080-1", platform="anotherplatform"),
+            metadata("7.4.90080-1"),
+            metadata("7.4.90080-2"),
+            metadata("7.4.90080-3", dsm_builds=(90082,)),
+            metadata("7.4.90080-1", platform="anotherplatform"),
         ]
 
         latest = latest_metadata(revisions)
 
         self.assertEqual(3, len(latest))
-        self.assertIn("7.4-90080-2", [item["version"] for item in latest])
-        self.assertEqual(((7, 4), 90080, 2), version_key("7.4-90080-2"))
+        self.assertIn("7.4.90080-2", [item["version"] for item in latest])
+        self.assertEqual(((7, 4, 90080), 2), version_key("7.4.90080-2"))
+        self.assertLess(version_key("7.4.90080-9"), version_key("7.5.95000-1"))
+
+    def test_releases_with_versions_dsm_rejects_are_not_listed(self):
+        latest = latest_metadata([metadata("7.4-90080-1"), metadata("7.4.90080-1")])
+
+        self.assertEqual(["7.4.90080-1"], [item["version"] for item in latest])
+        self.assertEqual([], latest_metadata([metadata("7.4-90080-1")]))
 
     def test_index_fields_and_site_outputs_are_dsm_and_worker_ready(self):
         with tempfile.TemporaryDirectory() as temporary:
             output_dir = Path(temporary) / "site"
             result = generate_site(
-                [metadata("7.4-90080-1")],
+                [metadata("7.4.90080-1")],
                 PACKAGE_ROOT,
                 output_dir,
                 "https://martinskuta.github.io/synology-packages",
@@ -93,7 +100,7 @@ class PackageIndexTests(unittest.TestCase):
             )
             self.assertEqual(72, _read_png(output_dir / "hidraw-enable_72.png")[0])
             self.assertEqual(120, _read_png(output_dir / "hidraw-enable_120.png")[0])
-            self.assertEqual("7.4-90080-1", json.loads((output_dir / "index.json").read_text())["packages"][0]["version"])
+            self.assertEqual("7.4.90080-1", json.loads((output_dir / "index.json").read_text())["packages"][0]["version"])
 
     def test_release_metadata_fetch_follows_github_pagination(self):
         first_page_url = "https://api.github.com/repos/owner/repo/releases?per_page=100&page=1"

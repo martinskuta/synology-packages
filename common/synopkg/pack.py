@@ -178,6 +178,11 @@ def pack_package(
         stage = Path(temporary)
         package_root_stage = stage / "payload"
         shutil.copytree(payload_source, package_root_stage)
+        static_payload = spk_source / "payload"
+        if static_payload.is_dir():
+            # Files shipped with the package definition (e.g. bin/apply) are
+            # merged on top of the build output.
+            shutil.copytree(static_payload, package_root_stage, dirs_exist_ok=True)
         target_env = _target_env(target)
         (package_root_stage / "target.env").write_text(target_env, encoding="utf-8")
 

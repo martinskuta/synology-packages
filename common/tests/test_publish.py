@@ -29,11 +29,11 @@ class ReleasePublishingTests(unittest.TestCase):
     def create_artifacts(self, directory):
         package_dir = Path(directory) / "spk-hidraw-enable-geminilakenk-7.4-90080-x86_64"
         package_dir.mkdir()
-        asset_name = "hidraw-enable_geminilakenk_7.4-90080-1.spk"
+        asset_name = "hidraw-enable_geminilakenk_7.4.90080-1.spk"
         asset = package_dir / asset_name
         asset.write_bytes(b"package archive")
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()
-        (package_dir / "hidraw-enable_geminilakenk_7.4-90080-1.sha256").write_text(
+        (package_dir / "hidraw-enable_geminilakenk_7.4.90080-1.sha256").write_text(
             f"{digest}  {asset_name}\n", encoding="utf-8"
         )
         metadata = {
@@ -43,12 +43,12 @@ class ReleasePublishingTests(unittest.TestCase):
             "platform": "geminilakenk",
             "target_arch": "x86_64",
             "source_build": "7.4-90080",
-            "tag": "hidraw-enable/v7.4-90080-1",
-            "version": "7.4-90080-1",
+            "tag": "hidraw-enable/v7.4.90080-1",
+            "version": "7.4.90080-1",
             "sha256": digest,
             "size": asset.stat().st_size,
         }
-        (package_dir / "hidraw-enable_geminilakenk_7.4-90080-1.meta.json").write_text(
+        (package_dir / "hidraw-enable_geminilakenk_7.4.90080-1.meta.json").write_text(
             json.dumps(metadata), encoding="utf-8"
         )
         (package_dir / "gpl.json").write_text(
@@ -78,7 +78,7 @@ class ReleasePublishingTests(unittest.TestCase):
                         "id": 42,
                         "draft": True,
                         "upload_url": release_url,
-                        "html_url": "https://github.com/martinskuta/synology-packages/releases/tag/hidraw-enable/v7.4-90080-1",
+                        "html_url": "https://github.com/martinskuta/synology-packages/releases/tag/hidraw-enable/v7.4.90080-1",
                         "assets": [],
                     }
                 ),
@@ -103,7 +103,7 @@ class ReleasePublishingTests(unittest.TestCase):
                 opener=opener,
             )
 
-            self.assertEqual(["hidraw-enable/v7.4-90080-1"], published)
+            self.assertEqual(["hidraw-enable/v7.4.90080-1"], published)
             self.assertEqual(6, len(calls))
             create_payload = json.loads(calls[1].data)
             self.assertTrue(create_payload["draft"])
@@ -119,9 +119,9 @@ class ReleasePublishingTests(unittest.TestCase):
             }
             self.assertEqual(
                 {
-                    "hidraw-enable_geminilakenk_7.4-90080-1.spk",
-                    "hidraw-enable_geminilakenk_7.4-90080-1.sha256",
-                    "hidraw-enable_geminilakenk_7.4-90080-1.meta.json",
+                    "hidraw-enable_geminilakenk_7.4.90080-1.spk",
+                    "hidraw-enable_geminilakenk_7.4.90080-1.sha256",
+                    "hidraw-enable_geminilakenk_7.4.90080-1.meta.json",
                 },
                 uploaded,
             )

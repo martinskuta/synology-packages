@@ -22,10 +22,10 @@ class PackageConfigTests(unittest.TestCase):
         package = load_package(self.config_path)
         target = package["targets"][0]
 
-        self.assertEqual("7.4-90080-1", target_metadata(package, target)["version"])
-        self.assertEqual("hidraw-enable/v7.4-90080-1", release_tag(package, target))
+        self.assertEqual("7.4.90080-1", target_metadata(package, target)["version"])
+        self.assertEqual("hidraw-enable/v7.4.90080-1", release_tag(package, target))
         self.assertEqual(
-            "hidraw-enable_geminilakenk_7.4-90080-1.spk", asset_name(package, target)
+            "hidraw-enable_geminilakenk_7.4.90080-1.spk", asset_name(package, target)
         )
         self.assertEqual("7.4-90080", target_metadata(package, target)["os_min_ver"])
         self.assertEqual("7.4-90081", target_metadata(package, target)["os_max_ver"])

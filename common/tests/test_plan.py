@@ -33,7 +33,7 @@ class BuildPlanTests(unittest.TestCase):
 
         self.assertEqual(1, len(matrix))
         self.assertEqual("hidraw-enable", matrix[0]["package"])
-        self.assertEqual("7.4-90080-1", matrix[0]["version"])
+        self.assertEqual("7.4.90080-1", matrix[0]["version"])
         self.assertEqual("7.4-90080", matrix[0]["os_min_ver"])
         self.assertEqual("https://example.test/kernel.txz", matrix[0]["kernel_url"])
 
@@ -41,7 +41,7 @@ class BuildPlanTests(unittest.TestCase):
         matrix = build_plan(
             self.packages_dir,
             repository="martinskuta/synology-packages",
-            tag_exists=lambda repository, tag, token: tag == "hidraw-enable/v7.4-90080-1",
+            tag_exists=lambda repository, tag, token: tag == "hidraw-enable/v7.4.90080-1",
             resolver=lambda _: self.fail("existing release should not resolve build inputs"),
         )
         self.assertEqual([], matrix)

@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+echo 'The current HID module remains loaded during upgrade; the new package will be checked before installation.'

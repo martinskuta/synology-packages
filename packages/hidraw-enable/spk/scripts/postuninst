@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+echo 'HIDRAW Support was removed. The defensive boot-task command is now a no-op; reboot to restore stock modules.'

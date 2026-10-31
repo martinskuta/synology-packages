@@ -1,0 +1,16 @@
+[
+  {
+    "step_title": "Enable HIDRAW at boot",
+    "items": [
+      {
+        "desc": "DSM package scripts cannot load kernel modules as root. Create a Task Scheduler task triggered at boot, running as root, with the command below."
+      },
+      {
+        "desc": "[ -x /var/packages/hidraw-enable/target/bin/apply ] && /var/packages/hidraw-enable/target/bin/apply start"
+      },
+      {
+        "desc": "The package leaves DSM system modules untouched. Run /var/packages/hidraw-enable/target/bin/apply restore as root for an immediate rollback, or reboot without the task to restore stock modules."
+      }
+    ]
+  }
+]

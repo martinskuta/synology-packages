@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+PACKAGE_DEST=${SYNOPKG_PKGDEST:-/var/packages/hidraw-enable/target}
+mkdir -p "$PACKAGE_DEST/var"
+echo 'HIDRAW Support upgraded. The root boot task will apply the new module at the next boot.'

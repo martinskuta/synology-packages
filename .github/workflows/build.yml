@@ -1,0 +1,234 @@
+name: Build Synology packages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - packages/**
+      - common/**
+      - .github/workflows/**
+  pull_request:
+    paths:
+      - packages/**
+      - common/**
+      - .github/workflows/**
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish releases and deploy Pages (master only)
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_builds: ${{ steps.plan.outputs.has_builds }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling dependencies
+        run: python -m pip install -r common/requirements.txt
+
+      - name: Run Python tests
+        run: python -m unittest discover common/tests
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck
+
+      - name: Lint package shell scripts
+        run: find packages -type f -name '*.sh' -print0 | xargs -0 -r shellcheck
+
+      - name: Resolve package build matrix
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MATRIX="$(python -m common.synopkg.plan --packages-dir packages)"
+          HAS_BUILDS="$(printf '%s' "$MATRIX" | python -c 'import json,sys; print("true" if json.load(sys.stdin)["include"] else "false")')"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "has_builds=$HAS_BUILDS" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.has_builds == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build package toolchain image with layer cache
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/${{ matrix.package_dir }}
+          file: packages/${{ matrix.package_dir }}/Dockerfile
+          push: false
+          load: true
+          tags: synology-hidraw-builder:ubuntu22
+          cache-from: type=gha,scope=synology-${{ matrix.package }}
+          cache-to: type=gha,mode=max,scope=synology-${{ matrix.package }}
+
+      - name: Restore Synology download cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/synology-cache
+          key: synology-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.source_build }}
+
+      - name: Build target payload
+        env:
+          PACKAGE_DIR: ${{ github.workspace }}/packages/${{ matrix.package_dir }}
+          TARGET_PLATFORM: ${{ matrix.platform }}
+          TARGET_ARCH: ${{ matrix.arch }}
+          SOURCE_BUILD: ${{ matrix.source_build }}
+          KERNEL_RELEASE: ${{ matrix.kernel_release }}
+          VERMAGIC: ${{ matrix.vermagic }}
+          TOOLCHAIN_URL: ${{ matrix.toolchain_url }}
+          KERNEL_URL: ${{ matrix.kernel_url }}
+          CACHE_DIR: ${{ runner.temp }}/synology-cache
+          OUT_DIR: ${{ runner.temp }}/package-build
+          IMAGE_TAG: synology-hidraw-builder:ubuntu22
+          SKIP_DOCKER_BUILD: "1"
+        run: bash "packages/${{ matrix.package_dir }}/build.sh"
+
+      - name: Pack SPK and release metadata
+        env:
+          PACKAGE_DIR: ${{ github.workspace }}/packages/${{ matrix.package_dir }}
+          OUT_DIR: ${{ runner.temp }}/package-build
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: >-
+          python -m common.synopkg.pack
+          --package-dir "$PACKAGE_DIR"
+          --payload-dir "$OUT_DIR/payload"
+          --output-dir "$OUT_DIR/artifacts"
+          --platform "${{ matrix.platform }}"
+          --arch "${{ matrix.arch }}"
+          --source-build "${{ matrix.source_build }}"
+          --info-env "$OUT_DIR/info.env"
+          --gpl-json "$OUT_DIR/gpl.json"
+          --repository "$GITHUB_REPOSITORY"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.source_build }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/package-build/artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [plan, build]
+    if: >-
+      ${{
+        needs.build.result == 'success' &&
+        needs.plan.outputs.has_builds == 'true' &&
+        github.ref == 'refs/heads/master' &&
+        github.event_name != 'pull_request' &&
+        (github.event_name != 'workflow_dispatch' || inputs.publish == true)
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling dependencies
+        run: python -m pip install -r common/requirements.txt
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/release-assets
+
+      - name: Publish immutable releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: >-
+          python -m common.synopkg.publish
+          --assets-dir "${{ runner.temp }}/release-assets"
+          --repository "$GITHUB_REPOSITORY"
+          --token "$GITHUB_TOKEN"
+          --commit "$GITHUB_SHA"
+
+  pages:
+    needs: [plan, build, publish]
+    if: >-
+      ${{
+        always() &&
+        needs.plan.result == 'success' &&
+        github.ref == 'refs/heads/master' &&
+        (
+          (needs.publish.result == 'success' && needs.build.result == 'success') ||
+          (github.event_name == 'workflow_dispatch' && inputs.publish == true &&
+           needs.plan.outputs.has_builds == 'false' && needs.build.result == 'skipped')
+        )
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling dependencies
+        run: python -m pip install -r common/requirements.txt
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Generate DSM package index and thumbnails
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: >-
+          python -m common.synopkg.index
+          --repository "$GITHUB_REPOSITORY"
+          --token "$GITHUB_TOKEN"
+          --package-root packages
+          --output-dir "${{ runner.temp }}/site"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

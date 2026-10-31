@@ -79,6 +79,10 @@ jobs:
 
       - name: Build package toolchain image with layer cache
         uses: docker/build-push-action@v6
+        env:
+          # The build record is uploaded as a `.dockerbuild` artifact that
+          # actions/download-artifact cannot extract, which breaks publishing.
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
         with:
           context: packages/${{ matrix.package_dir }}
           file: packages/${{ matrix.package_dir }}/Dockerfile
@@ -130,7 +134,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.source_build }}-${{ matrix.arch }}
+          name: spk-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.source_build }}-${{ matrix.arch }}
           path: ${{ runner.temp }}/package-build/artifacts/*
           if-no-files-found: error
           retention-days: 14
@@ -163,6 +167,7 @@ jobs:
       - name: Download package artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: spk-*
           path: ${{ runner.temp }}/release-assets
 
       - name: Publish immutable releases

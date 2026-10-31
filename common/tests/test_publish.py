@@ -27,7 +27,7 @@ class _Response:
 
 class ReleasePublishingTests(unittest.TestCase):
     def create_artifacts(self, directory):
-        package_dir = Path(directory) / "hidraw-enable-geminilakenk-7.4-90080-x86_64"
+        package_dir = Path(directory) / "spk-hidraw-enable-geminilakenk-7.4-90080-x86_64"
         package_dir.mkdir()
         asset_name = "hidraw-enable_geminilakenk_7.4-90080-1.spk"
         asset = package_dir / asset_name

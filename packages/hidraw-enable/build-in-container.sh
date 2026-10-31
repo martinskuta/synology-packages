@@ -120,7 +120,10 @@ if [ "$ACTUAL_VERMAGIC" != "$VERMAGIC" ]; then
         "$ACTUAL_VERMAGIC" "$VERMAGIC" >&2
     exit 1
 fi
-if ! nm "$HID_MODULE" | grep -qi hidraw; then
+# Capture nm output first: piping into `grep -q` lets grep exit early, which
+# kills nm with SIGPIPE and makes the pipeline fail under `set -o pipefail`.
+HID_SYMBOLS="$(nm "$HID_MODULE")"
+if ! grep -qi hidraw <<<"$HID_SYMBOLS"; then
     echo 'ERROR: rebuilt hid.ko has no HIDRAW symbols.' >&2
     exit 1
 fi

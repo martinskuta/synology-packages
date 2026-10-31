@@ -132,6 +132,11 @@ cp "$HID_MODULE" "$OUT_DIR/payload/modules/hid.ko"
 cp "$USBHID_MODULE" "$OUT_DIR/payload/modules/fallback/usbhid.ko"
 cp "$GENERIC_MODULE" "$OUT_DIR/payload/modules/fallback/hid-generic.ko"
 
+# bin/apply runs from the installed target directory, which does not contain
+# the DSM lifecycle scripts, so ship the shared helpers with the payload.
+mkdir -p "$OUT_DIR/payload/scripts"
+cp "${PACKAGE_DIR:-/package}/spk/scripts/common.sh" "$OUT_DIR/payload/scripts/common.sh"
+
 printf 'kernel_release=%s\nvermagic=%s\nsource_build=%s\n' \
     "$KERNEL_RELEASE" "$VERMAGIC" "${SOURCE_BUILD:-}" > "$OUT_DIR/info.env"
 

@@ -7,8 +7,25 @@ STATE_FILE="$PACKAGE_ROOT/var/state"
 LOG_FILE="$PACKAGE_ROOT/var/apply.log"
 MODULE_FILE="$PACKAGE_ROOT/modules/hid.ko"
 FALLBACK_DIR="$PACKAGE_ROOT/modules/fallback"
-# shellcheck disable=SC1091
-. "$PACKAGE_ROOT/scripts/common.sh"
+# DSM keeps the lifecycle scripts outside the target directory.
+DSM_SCRIPTS_DIR=${HIDRAW_DSM_SCRIPTS_DIR:-/var/packages/hidraw-enable/scripts}
+
+COMMON_SH=
+for candidate in "$PACKAGE_ROOT/scripts/common.sh" "$DSM_SCRIPTS_DIR/common.sh"; do
+    if [ -r "$candidate" ]; then
+        COMMON_SH=$candidate
+        break
+    fi
+done
+if [ -z "$COMMON_SH" ]; then
+    mkdir -p "$PACKAGE_ROOT/var" 2>/dev/null || true
+    printf '%s Missing common.sh in %s/scripts and %s.\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" "$PACKAGE_ROOT" "$DSM_SCRIPTS_DIR" \
+        | tee -a "$LOG_FILE" >&2 || true
+    exit 1
+fi
+# shellcheck disable=SC1090
+. "$COMMON_SH"
 
 log() {
     mkdir -p "$PACKAGE_ROOT/var"
@@ -33,7 +50,15 @@ require_root() {
 }
 
 load_target_metadata() {
-    hidraw_load_target_env "$PACKAGE_ROOT/scripts/target.env"
+    # package.tgz ships target.env at the root of the target directory.
+    for target_env in "$PACKAGE_ROOT/target.env" "$PACKAGE_ROOT/scripts/target.env" \
+        "$DSM_SCRIPTS_DIR/target.env"; do
+        if [ -r "$target_env" ]; then
+            hidraw_load_target_env "$target_env"
+            return
+        fi
+    done
+    hidraw_load_target_env "$PACKAGE_ROOT/target.env"
 }
 
 is_active() {
@@ -78,6 +103,15 @@ load_named_module() {
             return 0
         fi
     fi
+
+    # DSM keeps its modules flat in /lib/modules, often without modules.dep.
+    dashed=$(printf '%s' "$module" | tr '_' '-')
+    for module_path in "/lib/modules/$module.ko" "/lib/modules/$dashed.ko"; do
+        module_path=$(hidraw_root_path "$module_path")
+        if [ -r "$module_path" ] && insmod "$module_path"; then
+            return 0
+        fi
+    done
 
     return 1
 }

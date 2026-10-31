@@ -46,9 +46,11 @@ fi
 exit 1
 EOF
 chmod +x "$FAKE_BIN/uname" "$FAKE_BIN/modinfo"
+# Installed target layout as produced by build-in-container.sh + pack.py:
+# bin/apply, scripts/common.sh, modules/ and target.env at the root.
 cp "$SPK_DIR/payload/bin/apply" "$INSTALLED_PACKAGE/bin/apply"
 cp "$SPK_DIR/scripts/common.sh" "$INSTALLED_PACKAGE/scripts/common.sh"
-cp "$PKG_TEMP/target.env" "$INSTALLED_PACKAGE/scripts/target.env"
+cp "$PKG_TEMP/target.env" "$INSTALLED_PACKAGE/target.env"
 touch "$INSTALLED_PACKAGE/modules/hid.ko"
 cat > "$FAKE_BIN/rmmod" <<EOF
 #!/bin/sh
@@ -117,6 +119,32 @@ if [ "$(cat "$INSTALLED_PACKAGE/var/state")" != mismatch ]; then
     exit 1
 fi
 echo 'PASS: apply skips module changes on a compatibility mismatch.'
+
+# Without scripts/ in the target, apply uses DSM's package scripts directory.
+BARE_TARGET="$TMP_DIR/bare-target"
+DSM_SCRIPTS="$TMP_DIR/dsm-scripts"
+mkdir -p "$BARE_TARGET/bin" "$DSM_SCRIPTS"
+cp "$SPK_DIR/payload/bin/apply" "$BARE_TARGET/bin/apply"
+cp "$SPK_DIR/scripts/common.sh" "$DSM_SCRIPTS/common.sh"
+cp "$PKG_TEMP/target.env" "$BARE_TARGET/target.env"
+if PATH="$FAKE_BIN:$PATH" HIDRAW_ROOT="$FAKE_ROOT" HIDRAW_DSM_SCRIPTS_DIR="$DSM_SCRIPTS" \
+    sh "$BARE_TARGET/bin/apply" start >/dev/null 2>&1; then
+    echo 'FAIL: apply accepted a wrong platform from the bare target.' >&2
+    exit 1
+fi
+if [ "$(cat "$BARE_TARGET/var/state")" != mismatch ] \
+    || ! grep -q 'Compatibility check failed' "$BARE_TARGET/var/apply.log"; then
+    echo 'FAIL: apply did not run its checks using the DSM scripts directory.' >&2
+    exit 1
+fi
+rm -f "$DSM_SCRIPTS/common.sh"
+if PATH="$FAKE_BIN:$PATH" HIDRAW_ROOT="$FAKE_ROOT" HIDRAW_DSM_SCRIPTS_DIR="$DSM_SCRIPTS" \
+    sh "$BARE_TARGET/bin/apply" start >/dev/null 2>&1 \
+    || ! grep -q 'Missing common.sh' "$BARE_TARGET/var/apply.log"; then
+    echo 'FAIL: a missing common.sh was not reported in apply.log.' >&2
+    exit 1
+fi
+echo 'PASS: apply finds its helpers in the installed layout and logs when they are missing.'
 
 cat > "$FAKE_ROOT/etc.defaults/synoinfo.conf" <<'EOF'
 unique="synology_geminilakenk"

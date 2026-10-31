@@ -1,3 +1,8 @@
+3:
+- Fix the boot task doing nothing: bin/apply now ships with its helper script and reads the target metadata from the installed package.
+- Log to var/apply.log when the helpers are missing instead of exiting silently.
+- Reload stock HID modules directly from /lib/modules when modprobe cannot find them.
+
 2:
 - Fix installation failing in the pre-install check: read the target metadata from the package itself instead of an environment variable DSM does not set.
 - Read the stock HID vermagic even when modinfo is not available to the package user.

@@ -3,7 +3,7 @@ displayname: HIDRAW Support
 description: Loads a hidraw-enabled HID core module at boot.
 maintainer: martinskuta
 support_url: https://github.com/martinskuta/synology-packages
-revision: 2
+revision: 3
 os_min_ver: "7.0-40000"
 targets:
   - platform: geminilakenk

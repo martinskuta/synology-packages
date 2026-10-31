@@ -38,12 +38,44 @@ For this project:
 
 ## Repeat after a DSM update
 
-1. Identify the new DSM build number.
-2. Download the new matching GPL source and toolchain.
-3. Rebuild `hid.ko` with `CONFIG_HIDRAW=y`.
-4. Compare the new module’s `vermagic` with the NAS’s original `hid.ko`.
-5. Test-load the rebuilt module without replacing the original.
-6. Only after a successful test, optionally install it persistently.
+1. Identify the new DSM build number (run on NAS)
+```
+cat /proc/sys/kernel/syno_hw_version
+uname -a
+cat /etc.defaults/VERSION
+grep '^unique=' /etc.defaults/synoinfo.conf
+```
+2. Prepare build container (cwd = synology-build directory)
+```
+docker build -t synology-hidraw-builder:ubuntu22 .
+```
+3. Download the new matching GPL source and toolchain - replace DSM_BUILD, PLATFORM, ARCH and KERNEL_VERSION based on your DSM
+```
+docker run --rm -it `
+  --name synology-hid-fetch `
+  --mount "type=bind,src=D:\code\synology-kernel-modules\synology-build,dst=/work" `
+  -e DSM_BUILD=7.4-90080 `
+  -e PLATFORM=geminilakenk `
+  -e ARCH=x86_64 `
+  -e KERNEL_VERSION=5.10.x `
+  synology-hid-build:ubuntu22 `
+  bash /work/fetch-synology-build.sh
+```
+4. Rebuild `hid.ko` with `CONFIG_HIDRAW=y`.
+```
+docker run --rm -it `
+  --name synology-hid-build `
+  --mount "type=bind,src=D:\code\synology-kernel-modules\synology-build,dst=/work" `
+  -e PLATFORM=geminilakenk `
+  -e ARCH=x86_64 `
+  -e KERNEL_VERSION=5.10.x `
+  -e LOCALVERSION=+ `
+  synology-hid-build:ubuntu22 `
+  bash /work/build-hidraw.sh
+```
+5. Compare the new module’s `vermagic` with the NAS’s original `hid.ko`.
+6. Test-load the rebuilt module without replacing the original.
+7. Only after a successful test, optionally install it persistently.
 
 Never reuse a module built for a previous DSM build or kernel version.
 

@@ -135,8 +135,7 @@ apply_start() {
         return 1
     fi
 
-    bundled_vermagic=$(modinfo -F vermagic "$MODULE_FILE" 2>/dev/null \
-        | sed 's/[[:space:]]*$//' || true)
+    bundled_vermagic=$(hidraw_module_vermagic "$MODULE_FILE")
     if [ "$bundled_vermagic" != "$EXPECTED_VERMAGIC" ]; then
         write_state mismatch
         log "Bundled hid.ko vermagic mismatch: ${bundled_vermagic:-unknown}; expected $EXPECTED_VERMAGIC."

@@ -40,7 +40,7 @@ class PackagePackingTests(unittest.TestCase):
 
             self.assertTrue(result["spk"].is_file())
             self.assertEqual(
-                "hidraw-enable_geminilakenk_7.4.90080-1.spk", result["spk"].name
+                "hidraw-enable_geminilakenk_7.4.90080-2.spk", result["spk"].name
             )
             self.assertTrue(result["sha256"].is_file())
             self.assertTrue(result["meta"].is_file())
@@ -64,7 +64,7 @@ class PackagePackingTests(unittest.TestCase):
                 self.assertNotIn("./INFO", names)
                 self.assertTrue(spk.getmember("scripts/preinst").mode & 0o111)
                 info = spk.extractfile("INFO").read().decode("utf-8")
-                self.assertIn('version="7.4.90080-1"', info)
+                self.assertIn('version="7.4.90080-2"', info)
                 self.assertIn('arch="geminilakenk"', info)
                 self.assertIn('os_min_ver="7.4-90080"', info)
                 self.assertIn('os_max_ver="7.4-90080"', info)

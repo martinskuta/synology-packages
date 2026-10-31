@@ -2,6 +2,20 @@
 
 HIDRAW_ROOT="${HIDRAW_ROOT:-}"
 
+# Package scripts run as the unprivileged package user whose PATH may lack the
+# sbin directories (modinfo, insmod, rmmod). Appending keeps test stubs first.
+PATH="${PATH:-/usr/bin:/bin}:/sbin:/usr/sbin:/bin:/usr/bin"
+export PATH
+
+# Print a message for the user. DSM only shows script output in Package Center
+# when it is written to SYNOPKG_TEMP_LOGFILE.
+hidraw_report() {
+    printf '%s\n' "$*" >&2
+    if [ -n "${SYNOPKG_TEMP_LOGFILE:-}" ]; then
+        printf '%s\n' "$*" >> "$SYNOPKG_TEMP_LOGFILE" 2>/dev/null || true
+    fi
+}
+
 hidraw_root_path() {
     if [ -n "$HIDRAW_ROOT" ]; then
         printf '%s%s\n' "${HIDRAW_ROOT%/}" "$1"
@@ -13,7 +27,7 @@ hidraw_root_path() {
 hidraw_load_target_env() {
     target_file="$1"
     [ -r "$target_file" ] || {
-        printf 'Missing package target metadata: %s\n' "$target_file" >&2
+        hidraw_report "Missing package target metadata: $target_file"
         return 1
     }
 
@@ -39,7 +53,7 @@ hidraw_load_target_env() {
 
     if [ -z "$EXPECTED_PLATFORM" ] || [ -z "$EXPECTED_DSM_BUILDS" ] \
         || [ -z "$EXPECTED_KERNEL" ] || [ -z "$EXPECTED_VERMAGIC" ]; then
-        printf 'Incomplete package target metadata: %s\n' "$target_file" >&2
+        hidraw_report "Incomplete package target metadata: $target_file"
         return 1
     fi
 }
@@ -61,14 +75,21 @@ hidraw_current_kernel() {
     uname -r
 }
 
-hidraw_stock_vermagic() {
-    stock_module=$(hidraw_root_path /lib/modules/hid.ko)
-    stock_vermagic=$(modinfo -F vermagic "$stock_module" 2>/dev/null || true)
-    if [ -z "$stock_vermagic" ] && command -v strings >/dev/null 2>&1; then
-        stock_vermagic=$(strings "$stock_module" 2>/dev/null \
+# Print the vermagic of a module file. Falls back to reading the NUL-separated
+# .modinfo strings directly, because DSM may not provide modinfo or strings to
+# the package user.
+hidraw_module_vermagic() {
+    module_file=$1
+    module_vermagic=$(modinfo -F vermagic "$module_file" 2>/dev/null || true)
+    if [ -z "$module_vermagic" ] && [ -r "$module_file" ]; then
+        module_vermagic=$(tr '\000' '\n' < "$module_file" 2>/dev/null \
             | sed -n 's/^vermagic=//p' | sed -n '1p')
     fi
-    printf '%s\n' "$stock_vermagic" | sed 's/[[:space:]]*$//'
+    printf '%s\n' "$module_vermagic" | sed 's/[[:space:]]*$//'
+}
+
+hidraw_stock_vermagic() {
+    hidraw_module_vermagic "$(hidraw_root_path /lib/modules/hid.ko)"
 }
 
 hidraw_check_compatibility() {
@@ -79,29 +100,25 @@ hidraw_check_compatibility() {
     compatible=1
 
     if [ "$current_platform" != "$EXPECTED_PLATFORM" ]; then
-        printf 'Unsupported platform: %s (expected %s).\n' \
-            "${current_platform:-unknown}" "$EXPECTED_PLATFORM" >&2
+        hidraw_report "Unsupported platform: ${current_platform:-unknown} (expected $EXPECTED_PLATFORM)."
         compatible=0
     fi
 
     case " $EXPECTED_DSM_BUILDS " in
         *" $current_build "*) ;;
         *)
-            printf 'Unsupported DSM build: %s (expected one of %s).\n' \
-                "${current_build:-unknown}" "$EXPECTED_DSM_BUILDS" >&2
+            hidraw_report "Unsupported DSM build: ${current_build:-unknown} (expected one of $EXPECTED_DSM_BUILDS)."
             compatible=0
             ;;
     esac
 
     if [ "$current_kernel" != "$EXPECTED_KERNEL" ]; then
-        printf 'Unsupported kernel: %s (expected %s).\n' \
-            "${current_kernel:-unknown}" "$EXPECTED_KERNEL" >&2
+        hidraw_report "Unsupported kernel: ${current_kernel:-unknown} (expected $EXPECTED_KERNEL)."
         compatible=0
     fi
 
     if [ "$current_vermagic" != "$EXPECTED_VERMAGIC" ]; then
-        printf 'Stock HID vermagic mismatch: %s (expected %s).\n' \
-            "${current_vermagic:-unknown}" "$EXPECTED_VERMAGIC" >&2
+        hidraw_report "Stock HID vermagic mismatch: ${current_vermagic:-unknown} (expected $EXPECTED_VERMAGIC)."
         compatible=0
     fi
 

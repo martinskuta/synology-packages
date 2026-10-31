@@ -1,3 +1,8 @@
+2:
+- Fix installation failing in the pre-install check: read the target metadata from the package itself instead of an environment variable DSM does not set.
+- Read the stock HID vermagic even when modinfo is not available to the package user.
+- Show the reason for an incompatible NAS in Package Center.
+
 1:
 - Initial release for DSM 7.4 build 90080 on geminilakenk.
 - Load the HIDRAW-enabled HID core from the package directory at boot.
